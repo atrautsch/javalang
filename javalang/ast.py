@@ -62,6 +62,11 @@ class Node(object):
         if hasattr(self, "_position"):
             return self._position
 
+    @property
+    def end_position(self):
+        if hasattr(self, "_end_position"):
+            return self._end_position
+
 def walk_tree(root):
     children = None
 

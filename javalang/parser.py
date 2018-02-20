@@ -278,7 +278,7 @@ class Parser(object):
 
         if self.try_accept('package'):
             self.tokens.pop_marker(False)
-            
+
             token = self.tokens.look()
             package_name = self.parse_qualified_identifier()
             package = tree.PackageDeclaration(annotations=package_annotations,
@@ -782,10 +782,12 @@ class Parser(object):
 
         elif self.would_accept('static', '{'):
             self.accept('static')
-            return self.parse_block()
+            block, end_pos = self.parse_block()
+            return block
 
         elif self.would_accept('{'):
-            return self.parse_block()
+            block, end_pos = self.parse_block()
+            return block
 
         else:
             return self.parse_member_declaration()
@@ -878,37 +880,49 @@ class Parser(object):
         additional_dimensions = self.parse_array_dimension()
         throws = None
         body = None
+        end_pos = None
 
         if self.try_accept('throws'):
             throws = self.parse_qualified_identifier_list()
 
         if self.would_accept('{'):
-            body = self.parse_block()
+            body, end_pos = self.parse_block()
         else:
             self.accept(';')
 
-        return tree.MethodDeclaration(parameters=formal_parameters,
-                                     throws=throws,
-                                     body=body,
-                                     return_type=tree.Type(dimensions=additional_dimensions))
+        md = tree.MethodDeclaration(parameters=formal_parameters,
+                                    throws=throws,
+                                    body=body,
+                                    return_type=tree.Type(dimensions=additional_dimensions))
+        if end_pos:
+            md._end_position = end_pos
+        else:
+            md._end_position = md.position
+        return md
 
     @parse_debug
     def parse_void_method_declarator_rest(self):
         formal_parameters = self.parse_formal_parameters()
         throws = None
         body = None
+        end_pos = None
 
         if self.try_accept('throws'):
             throws = self.parse_qualified_identifier_list()
 
         if self.would_accept('{'):
-            body = self.parse_block()
+            body, end_pos = self.parse_block()
         else:
             self.accept(';')
 
-        return tree.MethodDeclaration(parameters=formal_parameters,
-                                      throws=throws,
-                                      body=body)
+        md = tree.MethodDeclaration(parameters=formal_parameters,
+                                    throws=throws,
+                                    body=body)
+        if end_pos:
+            md._end_position = end_pos
+        else:
+            md._end_position = md.position
+        return md
 
     @parse_debug
     def parse_constructor_declarator_rest(self):
@@ -919,7 +933,7 @@ class Parser(object):
         if self.try_accept('throws'):
             throws = self.parse_qualified_identifier_list()
 
-        body = self.parse_block()
+        body, end_pos = self.parse_block()
 
         return tree.ConstructorDeclaration(parameters=formal_parameters,
                                            throws=throws,
@@ -1008,7 +1022,7 @@ class Parser(object):
             declaration = self.parse_interface_method_or_field_declaration()
 
         declaration._position = token.position
-        
+
         return declaration
 
     @parse_debug
@@ -1079,7 +1093,7 @@ class Parser(object):
             throws = self.parse_qualified_identifier_list()
 
         if self.would_accept('{'):
-            body = self.parse_block()
+            body, end_pos = self.parse_block()
         else:
             self.accept(';')
 
@@ -1098,7 +1112,7 @@ class Parser(object):
             throws = self.parse_qualified_identifier_list()
 
         if self.would_accept('{'):
-            body = self.parse_block()
+            body, end_pos = self.parse_block()
         else:
             self.accept(';')
 
@@ -1137,7 +1151,7 @@ class Parser(object):
 
         while True:
             modifiers, annotations = self.parse_variable_modifiers()
-            
+
             token = self.tokens.look()
             parameter_type = self.parse_type()
             varargs = False
@@ -1269,13 +1283,14 @@ class Parser(object):
         statements = list()
 
         self.accept('{')
-
+        token = self.tokens.look()
         while not self.would_accept('}'):
             statement = self.parse_block_statement()
             statements.append(statement)
+            token = self.tokens.look()
         self.accept('}')
 
-        return statements
+        return statements, token.position
 
     @parse_debug
     def parse_block_statement(self):
@@ -1365,11 +1380,16 @@ class Parser(object):
     def parse_statement(self):
         token = self.tokens.look()
         if self.would_accept('{'):
-            block = self.parse_block()
-            return tree.BlockStatement(statements=block)
+            block, end_pos = self.parse_block()
+            bs = tree.BlockStatement(statements=block)
+            bs._position = token.position
+            bs._end_position = end_pos
+            return bs
 
         elif self.try_accept(';'):
-            return tree.Statement()
+            stmt = tree.Statement()
+            stmt._position = token.position
+            return stmt
 
         elif self.would_accept(Identifier, ':'):
             identifer = self.parse_identifier()
@@ -1388,9 +1408,11 @@ class Parser(object):
             if self.try_accept('else'):
                 else_statement = self.parse_statement()
 
-            return tree.IfStatement(condition=condition,
-                                    then_statement=then,
-                                    else_statement=else_statement)
+            ifstmt = tree.IfStatement(condition=condition,
+                                      then_statement=then,
+                                      else_statement=else_statement)
+            ifstmt._position = token.position
+            return ifstmt
 
         elif self.try_accept('assert'):
             condition = self.parse_expression()
@@ -1400,9 +1422,11 @@ class Parser(object):
                 value = self.parse_expression()
 
             self.accept(';')
-
-            return tree.AssertStatement(condition=condition,
-                                        value=value)
+            token = self.tokens.look()
+            ass = tree.AssertStatement(condition=condition,
+                                       value=value)
+            ass._position = token.position
+            return ass
 
         elif self.try_accept('switch'):
             switch_expression = self.parse_par_expression()
@@ -1417,8 +1441,11 @@ class Parser(object):
             condition = self.parse_par_expression()
             action = self.parse_statement()
 
-            return tree.WhileStatement(condition=condition,
-                                       body=action)
+            token = self.tokens.look()
+            ws = tree.WhileStatement(condition=condition,
+                                     body=action)
+            ws._position = token.position
+            return ws
 
         elif self.try_accept('do'):
             action = self.parse_statement()
@@ -1426,8 +1453,10 @@ class Parser(object):
             condition = self.parse_par_expression()
             self.accept(';')
 
-            return tree.DoStatement(condition=condition,
-                                    body=action)
+            ds = tree.DoStatement(condition=condition,
+                                  body=action)
+            ds._position = token.position
+            return ds
 
         elif self.try_accept('for'):
             self.accept('(')
@@ -1435,8 +1464,10 @@ class Parser(object):
             self.accept(')')
             for_statement = self.parse_statement()
 
-            return tree.ForStatement(control=for_control,
-                                     body=for_statement)
+            fs = tree.ForStatement(control=for_control,
+                                   body=for_statement)
+            fs._position = token.position
+            return fs
 
         elif self.try_accept('break'):
             label = None
@@ -1446,7 +1477,9 @@ class Parser(object):
 
             self.accept(';')
 
-            return tree.BreakStatement(goto=label)
+            bs = tree.BreakStatement(goto=label)
+            bs._position = token.position
+            return bs
 
         elif self.try_accept('continue'):
             label = None
@@ -1478,10 +1511,13 @@ class Parser(object):
 
         elif self.try_accept('synchronized'):
             lock = self.parse_par_expression()
-            block = self.parse_block()
+            block, end_pos = self.parse_block()
 
-            return tree.SynchronizedStatement(lock=lock,
-                                              block=block)
+            token = self.tokens.look()
+            ss = tree.SynchronizedStatement(lock=lock,
+                                            block=block)
+            ss._position = token.position
+            return ss
 
         elif self.try_accept('try'):
             resource_specification = None
@@ -1490,31 +1526,34 @@ class Parser(object):
             finally_block = None
 
             if self.would_accept('{'):
-                block = self.parse_block()
+                block, try_end_pos = self.parse_block()
 
                 if self.would_accept('catch'):
                     catches = self.parse_catches()
 
                 if self.try_accept('finally'):
-                    finally_block = self.parse_block()
+                    finally_block, fb_end_pos = self.parse_block()
 
                 if catches == None and finally_block == None:
                     self.illegal("Expected catch/finally block")
 
             else:
                 resource_specification = self.parse_resource_specification()
-                block = self.parse_block()
+                block, end_pos = self.parse_block()
 
                 if self.would_accept('catch'):
                     catches = self.parse_catches()
 
                 if self.try_accept('finally'):
-                    finally_block = self.parse_block()
+                    finally_block, fb_end_pos = self.parse_block()
 
-            return tree.TryStatement(resources=resource_specification,
-                                     block=block,
-                                     catches=catches,
-                                     finally_block=finally_block)
+            # token = self.tokens.look()
+            ts = tree.TryStatement(resources=resource_specification,
+                                   block=block,
+                                   catches=catches,
+                                   finally_block=finally_block)
+            ts._position = token.position
+            return ts
 
         else:
             expression = self.parse_expression()
@@ -1540,6 +1579,7 @@ class Parser(object):
 
     @parse_debug
     def parse_catch_clause(self):
+        token = self.tokens.look()
         self.accept('catch', '(')
 
         modifiers, annotations = self.parse_variable_modifiers()
@@ -1554,10 +1594,12 @@ class Parser(object):
         catch_parameter.name = self.parse_identifier()
 
         self.accept(')')
-        block = self.parse_block()
+        block, end_pos = self.parse_block()
 
-        return tree.CatchClause(parameter=catch_parameter,
-                                block=block)
+        cc = tree.CatchClause(parameter=catch_parameter,
+                              block=block)
+        cc._position = token.position
+        return cc
 
     @parse_debug
     def parse_resource_specification(self):
@@ -1646,7 +1688,7 @@ class Parser(object):
                 return self.parse_for_var_control()
         except JavaSyntaxError:
             pass
-
+        token = self.tokens.look()
         init = None
         if not self.would_accept(';'):
             init = self.parse_for_init_or_update()
@@ -1663,12 +1705,15 @@ class Parser(object):
         if not self.would_accept(')'):
             update = self.parse_for_init_or_update()
 
-        return tree.ForControl(init=init,
-                               condition=condition,
-                               update=update)
+        fc = tree.ForControl(init=init,
+                             condition=condition,
+                             update=update)
+        fc._position = token.position
+        return fc
 
     @parse_debug
     def parse_for_var_control(self):
+        token = self.tokens.look()
         modifiers, annotations = self.parse_variable_modifiers()
         var_type = self.parse_type()
         var_name = self.parse_identifier()
@@ -1682,15 +1727,20 @@ class Parser(object):
 
         if isinstance(rest, tree.Expression):
             var.declarators = [tree.VariableDeclarator(name=var_name)]
-            return tree.EnhancedForControl(var=var,
-                                           iterable=rest)
+
+            efc = tree.EnhancedForControl(var=var,
+                                          iterable=rest)
+            efc._position = token.position
+            return efc
         else:
             declarators, condition, update = rest
             declarators[0].name = var_name
             var.declarators = declarators
-            return tree.ForControl(init=var,
-                                   condition=condition,
-                                   update=update)
+            fc = tree.ForControl(init=var,
+                                 condition=condition,
+                                 update=update)
+            fc._position = token.position
+            return fc
 
     @parse_debug
     def parse_for_var_control_rest(self):
@@ -1841,8 +1891,11 @@ class Parser(object):
                     self.accept(')')
                     expression = self.parse_expression_3()
 
-                    return tree.Cast(type=cast_target,
-                                     expression=expression)
+                    token = self.tokens.look()
+                    c = tree.Cast(type=cast_target,
+                                  expression=expression)
+                    c._position = token.position
+                    return c
             except JavaSyntaxError:
                 pass
 
@@ -1898,7 +1951,8 @@ class Parser(object):
     def parse_lambda_method_body(self):
         if self.accept('->'):
             if self.would_accept('{'):
-                return self.parse_block()
+                block, end_pos = self.parse_block()
+                return block
             else:
                 return self.parse_expression()
 
@@ -1939,7 +1993,9 @@ class Parser(object):
                 arguments = self.parse_arguments()
                 return tree.ExplicitConstructorInvocation(arguments=arguments)
 
-            return tree.This()
+            trthis = tree.This()
+            trthis._position = token.position
+            return trthis
         elif self.would_accept('super', '::'):
             self.accept('super')
             return token
@@ -2050,9 +2106,12 @@ class Parser(object):
             arguments = self.parse_arguments()
 
         if identifier and arguments is not None:
-            return tree.SuperMethodInvocation(member=identifier,
-                                              arguments=arguments,
-                                              type_arguments=type_arguments)
+            token = self.tokens.look()
+            smi = tree.SuperMethodInvocation(member=identifier,
+                                             arguments=arguments,
+                                             type_arguments=type_arguments)
+            smi._position = token.position
+            return smi
         elif arguments is not None:
             return tree.SuperConstructorInvocation(arguments=arguments)
         else:
@@ -2097,10 +2156,13 @@ class Parser(object):
             return rest
         else:
             arguments, body = self.parse_class_creator_rest()
-            return tree.ClassCreator(constructor_type_arguments=constructor_type_arguments,
-                                     type=created_name,
-                                     arguments=arguments,
-                                     body=body)
+            token = self.tokens.look()
+            cc = tree.ClassCreator(constructor_type_arguments=constructor_type_arguments,
+                                   type=created_name,
+                                   arguments=arguments,
+                                   body=body)
+            cc._position = token.position
+            return cc
 
     @parse_debug
     def parse_created_name(self):
