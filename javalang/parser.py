@@ -1229,11 +1229,14 @@ class Parser(object):
     @parse_debug
     def parse_variable_declarator(self):
         identifier = self.parse_identifier()
+        token = self.tokens.look()
         array_dimension, initializer = self.parse_variable_declarator_rest()
 
-        return tree.VariableDeclarator(name=identifier,
-                                       dimensions=array_dimension,
-                                       initializer=initializer)
+        vd = tree.VariableDeclarator(name=identifier,
+                                     dimensions=array_dimension,
+                                     initializer=initializer)
+        vd._position = position
+        return vd
 
     @parse_debug
     def parse_variable_declarator_rest(self):
@@ -1728,7 +1731,10 @@ class Parser(object):
         rest = self.parse_for_var_control_rest()
 
         if isinstance(rest, tree.Expression):
-            var.declarators = [tree.VariableDeclarator(name=var_name)]
+            vd = tree.VariableDeclarator(name=var_name)
+            vd._position = token.position
+
+            var.declarators = [vd]
 
             efc = tree.EnhancedForControl(var=var,
                                           iterable=rest)
