@@ -1235,7 +1235,7 @@ class Parser(object):
         vd = tree.VariableDeclarator(name=identifier,
                                      dimensions=array_dimension,
                                      initializer=initializer)
-        vd._position = position
+        vd._position = token.position
         return vd
 
     @parse_debug
