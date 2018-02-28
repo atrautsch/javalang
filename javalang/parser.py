@@ -1370,10 +1370,12 @@ class Parser(object):
         declarators = self.parse_variable_declarators()
         self.accept(';')
 
+        token = self.tokens.look()
         var = tree.LocalVariableDeclaration(modifiers=modifiers,
                                             annotations=annotations,
                                             type=java_type,
                                             declarators=declarators)
+        var._position = token.position
         return var
 
     @parse_debug
@@ -1722,7 +1724,7 @@ class Parser(object):
         var = tree.VariableDeclaration(modifiers=modifiers,
                                        annotations=annotations,
                                        type=var_type)
-
+        var._position = token.position
         rest = self.parse_for_var_control_rest()
 
         if isinstance(rest, tree.Expression):

@@ -32,6 +32,23 @@ POSITION_FOR3 = """public class Lambda {
 }
 """
 
+POSITION_METHOD = """public class Lambda {
+
+    public String[] main(String args[]) {
+        try {
+
+        } catch(Exception e) {
+
+        }
+
+        if (true) {
+
+        }
+        return args;
+    }
+}
+"""
+
 POSITION_TRY_CATCH = """public class Lambda {
 
     public static void main(String args[]) {
@@ -178,6 +195,16 @@ class TestPositions(unittest.TestCase):
                 self.assertEqual(node.position[1], 12)
 
                 self.assertEqual(node.end_position[0], 84)
+                self.assertEqual(node.end_position[1], 5)
+
+    def test_method_non_void(self):
+        ast = parse.parse(POSITION_METHOD)
+        for path, node in ast.filter(tree.MethodDeclaration):
+            if node.name == 'main':
+                self.assertEqual(node.position[0], 3)
+                self.assertEqual(node.position[1], 12)
+
+                self.assertEqual(node.end_position[0], 14)
                 self.assertEqual(node.end_position[1], 5)
 
 if __name__ == "__main__":
