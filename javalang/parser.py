@@ -1830,10 +1830,12 @@ class Parser(object):
             true_expression = self.parse_expression()
             self.accept(':')
             false_expression = self.parse_expressionl()
-
-            return tree.TernaryExpression(condition=expression_2,
-                                          if_true=true_expression,
-                                          if_false=false_expression)
+            te = tree.TernaryExpression(condition=expression_2,
+                                        if_true=true_expression,
+                                        if_false=false_expression)
+            token = self.tokens.look()
+            te._position = token.position
+            return te
         if self.would_accept('->'):
             body = self.parse_lambda_method_body()
             return tree.LambdaExpression(parameters=[expression_2],
