@@ -1,4 +1,5 @@
 import pickle
+from collections import deque
 
 import six
 
@@ -67,7 +68,9 @@ class Node(object):
         if hasattr(self, "_end_position"):
             return self._end_position
 
-def walk_tree(root):
+
+def walk_tree2(root):
+    """The standard recursive ast dfs traversal from javalang."""
     children = None
 
     if isinstance(root, Node):
@@ -81,8 +84,56 @@ def walk_tree(root):
             for path, node in walk_tree(child):
                 yield (root,) + path, node
 
+
+def _parent_path(node, parent_links):
+    """We are ineffectively iterating over a list of tuples here."""
+    pp = ()
+
+    while node:
+        for pl in parent_links:
+            if pl[0] == node:
+                if pl[1]:  # CompilationUnit has None as parent but we do not want that added
+                    pp = (pl[1],) + pp
+                node = pl[1]
+                break
+        else:
+            break
+    return pp
+
+
+def walk_tree(root):
+    """We iteratively dfs the ast."""
+    qu = deque()
+    parent_links = [(root, None)]  # parent or child can be a list so we can not use a key value pair
+
+    yield (), root
+
+    node = root
+
+    while node or qu:
+        children = []
+        if isinstance(node, (list, tuple)):
+            children = node
+        if isinstance(node, Node):
+            children = node.children
+
+        for c in reversed(children):  # reverse the children because we emulate a stack
+            parent_links.append((c, node))
+            qu.append(c)
+
+        try:
+            node = qu.pop()
+        except IndexError:
+            node = None
+
+        if isinstance(node, Node):
+            pp = _parent_path(node, parent_links)
+            yield pp, node
+
+
 def dump(ast, file):
     pickle.dump(ast, file)
+
 
 def load(file):
     return pickle.load(file)
