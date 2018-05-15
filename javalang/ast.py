@@ -99,8 +99,11 @@ def _parent_path(node, parent_links):
     pp = ()
 
     while node:
-        if isinstance(node, (list, set)):
-            key = frozenset(node)
+
+        # switch to immutable datatype s.t. we can use them as key for dict lookup
+        if isinstance(node, list):
+            nk = [tuple(k1) if isinstance(k1, list) else k1 for k1 in node]
+            key = tuple(nk)
         else:
             key = node
         parent = parent_links[key]
@@ -111,9 +114,12 @@ def _parent_path(node, parent_links):
 
 
 def walk_tree_iterative(root):
-    """We iteratively dfs the ast."""
+    """We iteratively dfs the ast.
+
+    As we also need the path to the root from each child we safe parent links along the way.
+    """
     qu = deque()
-    parent_links = {root: None}  # parent or child can be a list so we can not use a key value pair
+    parent_links = {root: None}  # k, v pair of child : parent
 
     yield (), root
 
@@ -128,10 +134,20 @@ def walk_tree_iterative(root):
 
         for c in reversed(children):  # reverse the children because we emulate a stack
 
-            # if we have an unhashable we frozenset it s.t. we can use it as key in dict
+            if not isinstance(c, (list, tuple, Node)):
+                continue
+
+            # if mutable cast to immutable for dict key for parent link lookup
             key = c
-            if isinstance(c, (list, set)):
-                key = frozenset(c)
+            if isinstance(c, list):
+
+                # our list could itself contain lists
+                nk = [tuple(k1) if isinstance(k1, list) else k1 for k1 in c]
+                try:
+                    key = tuple(nk)
+                except TypeError:
+                    print(nk)
+                    raise
 
             parent_links[key] = node
             qu.append(c)
